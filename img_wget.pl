@@ -3,7 +3,16 @@
 use threads;
 use threads::shared;
 use URI::URL;
-use Image::Magick;
+
+my $IMAGEMAGICK = undef; # use on demand
+if ($^O ne 'cygwin') { # cygwin 2.882 64-bit hag broken Image::Magick
+	$IMAGEMAGICK = eval {
+		require Image::Magick;
+		import Image::Magick qw(ping);
+		return 1;
+	}
+}
+
 use Irssi qw (command_bind
     settings_get_bool settings_add_bool
     settings_get_str  settings_add_str);
@@ -100,19 +109,22 @@ sub dlfunc(@) {
 	$url = urlencode($url);
 	system($wgetpath, '--no-check-certificate', '-q', '-T', '20', '-O', $file, '-o', '/dev/null', $url);
 
-	if ($file =~ /(png|jpe?g|gif)$/i){
-		my $im = Image::Magick->new();
-		my $rename = 1;
-		my (undef, undef, undef, $format) = $im->Ping($file);
+	if (($^O ne 'cygwin') and defined($IMAGEMAGICK)) {
+		eval {
+			if ($file =~ /(png|jpe?g|gif)$/i){
+				my $im = Image::Magick->new();
+				my $rename = 1;
+				my (undef, undef, undef, $format) = $im->Ping($file);
 
-		if (defined($format)) {
-			$rename = 0 if (($format eq 'JPEG') and ($file =~ /jpe?g$/i));
-			$rename = 0 if (($format eq 'GIF') and ($file =~ /gif$/i));
-			$rename = 0 if (($format =~ /^PNG/) and ($file =~ /png$/i));
-			rename $file, sprintf("%s.%s", $file, lc($format)) if ($rename == 1);
+				if (defined($format)) {
+					$rename = 0 if (($format eq 'JPEG') and ($file =~ /jpe?g$/i));
+					$rename = 0 if (($format eq 'GIF') and ($file =~ /gif$/i));
+					$rename = 0 if (($format =~ /^PNG/) and ($file =~ /png$/i));
+					rename $file, sprintf("%s.%s", $file, lc($format)) if ($rename == 1);
+				}
+			}
 		}
 	}
-
 	return;
 }
 
