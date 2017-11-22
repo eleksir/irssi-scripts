@@ -68,6 +68,7 @@ sub hookfn {
 				sleep 1 unless(defined($t));
 			} unless (defined($t));
 
+			$t->detach();
 			undef $t;
 
 			if ($active == 1) {
