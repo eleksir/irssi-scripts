@@ -6,12 +6,32 @@ use Cache::Memcached;
 use URI::URL;
 my $HTINY = undef;
 my $HTINYS = undef;
-$HTINY = eval {
+
+eval {
 	require HTTP::Tiny;            # stock perl module, but some assholes from debian rip perl into modules,
 	import HTTP::Tiny;             # so there is non-zero possibility that we have no this module
-	$HTINYS = HTTP::Tiny->can_ssl; # to operate ssl stuff, we need Net::SSLeay, but sometimes
-	return 1;                      # installed perl environment lacks it, so use Tiny with care
 };
+
+if ($@ eq '') {
+	$HTINY = 1;
+
+	eval {
+		require Net::SSLeay;
+		import Net::SSLeay;
+	};
+
+	if ($@ eq '') {
+		eval {
+			require IO::Socket::SSL;
+			import IO::Socket::SSL;
+		};
+
+		if ($@ eq '') {
+			$HTINYS = 1; # to operate ssl stuff, we need Net::SSLeay, but sometimes
+			             # installed perl environment lacks it, so use Tiny with care
+		}
+	}
+}
 
 my $IMAGEMAGICK = undef; # use on demand
 if ($^O ne 'cygwin') { # cygwin 2.882 64-bit has broken Image::Magick
@@ -41,7 +61,7 @@ while ( 1 ) {
 	my $memd = new Cache::Memcached { 'servers' => [ "127.0.0.1:11211" ] };
 	my $itemref = $memd->stats(['items']);
 
-	if (length($itemref->{'hosts'}->{'127.0.0.1:11211'}->{'items'}) > 2) {
+	if (defined($itemref->{'hosts'}->{'127.0.0.1:11211'}->{'items'}) and (length($itemref->{'hosts'}->{'127.0.0.1:11211'}->{'items'}) > 2)) {
 		my $slabinfo = (split("\n", $itemref->{'hosts'}->{'127.0.0.1:11211'}->{'items'}))[0];
 		my $slab = (split(/\:/, $slabinfo))[1];
 		my $itemsamount = (split(/ /, $slabinfo))[2];
@@ -71,7 +91,7 @@ sub cdlfunc($) {
 		$fname =~ s/[^\w!., -#]/_/g;
 		$savepath = $savepath . "/" . $fname . ".$extension";
 
-		if ( (lc($url) =~ /\.(gif|jpeg|png|webm|mp4)$/) and ($1 eq $extension) ){
+		if ( (lc($url) =~ /\.(gif|jpe?g|png|webm|mp4)$/) and ($1 eq $extension) ) {
 			$savepath = $ENV{'HOME'} . "/imgsave/" . $fname;
 		}
 
@@ -104,7 +124,7 @@ sub dlfunc(@) {
 
 	if (($^O ne 'cygwin') and defined($IMAGEMAGICK)) {
 		eval {
-			if ($file =~ /(png|jpe?g|gif)$/i){
+			if ($file =~ /(png|jpe?g|gif)$/i) {
 				my $im = Image::Magick->new();
 				my $rename = 1;
 				my (undef, undef, undef, $format) = $im->Ping($file);
