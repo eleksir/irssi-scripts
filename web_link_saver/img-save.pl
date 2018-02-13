@@ -4,6 +4,8 @@ use warnings "all";
 use strict;
 use Cache::Memcached;
 use URI::URL;
+use threads;
+
 my $HTINY = undef;
 my $HTINYS = undef;
 
@@ -34,12 +36,17 @@ if ($@ eq '') {
 }
 
 my $IMAGEMAGICK = undef; # use on demand
-if ($^O ne 'cygwin') { # cygwin 2.882 64-bit has broken Image::Magick
-	$IMAGEMAGICK = eval {
+
+if ($^O ne 'cygwin') {   # cygwin 2.882 64-bit has broken Image::Magick
+	eval {
 		require Image::Magick;
 		import Image::Magick qw(ping);
 		return 1;
 	};
+
+	if ($@ eq '') {
+		$IMAGEMAGICK = 1;
+	}
 }
 
 sub dlfunc(@);
@@ -61,16 +68,25 @@ while ( 1 ) {
 	my $memd = new Cache::Memcached { 'servers' => [ "127.0.0.1:11211" ] };
 	my $itemref = $memd->stats(['items']);
 
-	if (defined($itemref->{'hosts'}->{'127.0.0.1:11211'}->{'items'}) and (length($itemref->{'hosts'}->{'127.0.0.1:11211'}->{'items'}) > 2)) {
+	if (defined($itemref->{'hosts'}->{'127.0.0.1:11211'}->{'items'})
+	        and (length($itemref->{'hosts'}->{'127.0.0.1:11211'}->{'items'}) > 2)) {
+
 		my $slabinfo = (split("\n", $itemref->{'hosts'}->{'127.0.0.1:11211'}->{'items'}))[0];
 		my $slab = (split(/\:/, $slabinfo))[1];
 		my $itemsamount = (split(/ /, $slabinfo))[2];
 		my $cachedump = $memd->stats(["cachedump $slab $itemsamount"]);
-		my @keys = map { (split(/ /))[1] } split(/\n/, $cachedump->{'hosts'}->{'127.0.0.1:11211'}->{"cachedump $slab $itemsamount"});
+
+		my @keys = map {
+			(split(/ /))[1];
+		} split(/\n/, $cachedump->{'hosts'}->{'127.0.0.1:11211'}->{"cachedump $slab $itemsamount"});
 
 		foreach my $key (@keys) {
+			next unless ($key =~ /^hcht_/);
+			next unless ($key =~ /^irssi_/);
 			my $url = $memd->get($key);
-			cdlfunc($url);
+			my $t = threads->create('cdlfunc', $url);
+			$t->detach() if (defined($t));            # detach only if we succeed in creating thread :)
+			undef $t;
 			$memd->delete($key);
 		}
 	}
@@ -89,7 +105,7 @@ sub cdlfunc($) {
 		mkdir ($savepath) unless (-d $savepath);
 		my $fname = $url;
 		$fname =~ s/[^\w!., -#]/_/g;
-		$savepath = $savepath . "/" . $fname . ".$extension";
+		$savepath = sprintf("%s/%s.%s", $savepath, $fname, $extension);
 
 		if ( (lc($url) =~ /\.(gif|jpe?g|png|webm|mp4)$/) and ($1 eq $extension) ) {
 			$savepath = $ENV{'HOME'} . "/imgsave/" . $fname;
