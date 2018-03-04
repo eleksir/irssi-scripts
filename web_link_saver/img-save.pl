@@ -4,7 +4,6 @@ use warnings "all";
 use strict;
 use Cache::Memcached;
 use URI::URL;
-use threads;
 
 my $HTINY = undef;
 my $HTINYS = undef;
@@ -40,8 +39,7 @@ my $IMAGEMAGICK = undef; # use on demand
 if ($^O ne 'cygwin') {   # cygwin 2.882 64-bit has broken Image::Magick
 	eval {
 		require Image::Magick;
-		import Image::Magick qw(ping);
-		return 1;
+		import Image::Magick;
 	};
 
 	if ($@ eq '') {
@@ -81,17 +79,27 @@ while ( 1 ) {
 		} split(/\n/, $cachedump->{'hosts'}->{'127.0.0.1:11211'}->{"cachedump $slab $itemsamount"});
 
 		foreach my $key (@keys) {
-			next unless ($key =~ /^hcht_/);
 			next unless ($key =~ /^irssi_/);
+			next unless ($key =~ /^xchtlink_/);
+
 			my $url = $memd->get($key);
-			my $t = threads->create('cdlfunc', $url);
-			$t->detach() if (defined($t));            # detach only if we succeed in creating thread :)
-			undef $t;
+			cdlfunc($url);
+			undef $url;
 			$memd->delete($key);
 		}
+
+		undef $slabinfo;
+		undef $slab;
+		undef $itemsamount;
+		undef $cachedump;
+		@keys = -1;
+		undef @keys;
 	}
 
+	undef $itemref;
 	$memd->disconnect_all;
+	undef $memd;
+
 	sleep(30);
 }
 
@@ -112,7 +120,12 @@ sub cdlfunc($) {
 		}
 
 		dlfunc($url, $savepath);
+		undef $savepath;
+		undef $fname;
 	}
+
+	undef $url;
+	undef $extension;
 
 	return;
 }
@@ -129,7 +142,7 @@ sub dlfunc(@) {
 			undef $http1;
 		};
 	} elsif (defined($HTINY)) {
-		eval { 
+		eval {
 			my $http2 = HTTP::Tiny->new();
 			$http2->mirror($url, $file);
 			undef $http2;
@@ -151,10 +164,16 @@ sub dlfunc(@) {
 					$rename = 0 if (($format =~ /^PNG/) and ($file =~ /png$/i));
 					rename $file, sprintf("%s.%s", $file, lc($format)) if ($rename == 1);
 				}
+
+				undef $im;
+				undef $rename;
+				undef $format;
 			}
 		}
 	}
 
+	undef $url;
+	undef $file;
 	return;
 }
 
@@ -167,14 +186,12 @@ sub is_picture($) {
 		eval {
 			my $http = HTTP::Tiny->new();
 			$r = $http->request('HEAD', $url);
-			undef $url;
 			undef $http;
 		};
 	} elsif (defined($HTINY)) {
 		eval {
 			my $http = HTTP::Tiny->new();
 			$r = $http->request('HEAD', $url);
-			undef $url;
 			undef $http;
 		};
 	} else {
@@ -183,11 +200,14 @@ sub is_picture($) {
 			foreach (split(/\n/, $r)) {
 				next unless($_ =~ /Content\-Type: (.+)/);
 				my $h = ($1); chomp($h);
+				$r = undef;
 				$r->{'success'} = 1;
 				$r->{'headers'}->{'content-type'} = $h;
+				undef $h;
 				last;
 			}
 		} else {
+			$r = undef;
 			$r->{'success'} = 0;
 		}
 	}
@@ -203,6 +223,7 @@ sub is_picture($) {
 		$r = undef;
 	}
 
+	undef $url;
 	return $r;
 }
 
@@ -213,3 +234,4 @@ sub urlencode($) {
 	undef $urlobj;
 	return $url;
 }
+
