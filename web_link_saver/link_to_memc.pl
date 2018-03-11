@@ -10,14 +10,14 @@ use vars qw($VERSION %IRSSI);
 
 sub hookfn;
 
-$VERSION = '1.00';
+$VERSION = '1.00a';
 %IRSSI = (
     authors     => 'Eleksir',
     contact     => 'eleksir@exs-elm.ru',
     name        => 'Image link saver',
     description => 'Saves image link to memcache',
-    license     => 'Public Domain',
-    changed     => 'Sun Oct 02 12:21 CET 2016',
+    license     => 'BSD',
+    changed     => 'Sun Mar 11 15:39 CET 2018',
 );
 
 
@@ -30,7 +30,7 @@ sub hookfn {
 	foreach (@words) {
 		if ($_ =~ m{:?https?://([a-zA-Z0-9.-]+\.[a-zA-Z]+)/(?:.*)}) {
 			my $memd = new Cache::Memcached { 'servers' => [ "127.0.0.1:11211" ] };
-			$memd->set(md5_base64($str), $str);
+			$memd->set('irssi_' . md5_base64($str), $str);
 			$memd->disconnect_all;
 			last;
 		}
