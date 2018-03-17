@@ -4,7 +4,6 @@ use warnings "all";
 use strict;
 use Cache::Memcached;
 use URI::URL;
-use Data::Dumper;
 
 my $HTINY = undef;
 my $HTINYS = undef;
@@ -243,4 +242,3 @@ sub urlencode($) {
 	undef $urlobj;
 	return $url;
 }
-
