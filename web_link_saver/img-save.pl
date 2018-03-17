@@ -4,6 +4,7 @@ use warnings "all";
 use strict;
 use Cache::Memcached;
 use URI::URL;
+use Data::Dumper;
 
 my $HTINY = undef;
 my $HTINYS = undef;
@@ -69,31 +70,39 @@ while ( 1 ) {
 	if (defined($itemref->{'hosts'}->{'127.0.0.1:11211'}->{'items'})
 	        and (length($itemref->{'hosts'}->{'127.0.0.1:11211'}->{'items'}) > 2)) {
 
-		my $slabinfo = (split("\n", $itemref->{'hosts'}->{'127.0.0.1:11211'}->{'items'}))[0];
-		my $slab = (split(/\:/, $slabinfo))[1];
-		my $itemsamount = (split(/ /, $slabinfo))[2];
-		my $cachedump = $memd->stats(["cachedump $slab $itemsamount"]);
+		foreach my $stat (split("\n", $itemref->{'hosts'}->{'127.0.0.1:11211'}->{'items'})) {
+			my $slab;
+			my $itemsamount;
 
-		my @keys = map {
-			(split(/ /))[1];
-		} split(/\n/, $cachedump->{'hosts'}->{'127.0.0.1:11211'}->{"cachedump $slab $itemsamount"});
+			if ($stat =~ /^STAT items\:(\d+)\:number (\d+)/) {
+				$slab = $1;
+				$itemsamount = $2;
+			} else {
+				undef $slab;
+				undef $itemsamount;
+				next;
+			}
 
-		foreach my $key (@keys) {
-			next unless ($key =~ /^irssi_/);
-			next unless ($key =~ /^xchtlink_/);
+			my $cachedump = $memd->stats(["cachedump $slab $itemsamount"]);
+			my @keys = map {
+				(split(/ /))[1];
+			} split(/\n/, $cachedump->{'hosts'}->{'127.0.0.1:11211'}->{"cachedump $slab $itemsamount"});
 
-			my $url = $memd->get($key);
-			cdlfunc($url);
-			undef $url;
-			$memd->delete($key);
+			foreach my $key (@keys) {
+				if (($key =~ /^irssi_/) or ($key =~ /^xchtlink_/)) {
+					my $url = $memd->get($key);
+					cdlfunc($url);
+					undef $url;
+					$memd->delete($key);
+				}
+			}
+
+			undef $slab;
+			undef $itemsamount;
+			undef $cachedump;
+			@keys = -1;
+			undef @keys;
 		}
-
-		undef $slabinfo;
-		undef $slab;
-		undef $itemsamount;
-		undef $cachedump;
-		@keys = -1;
-		undef @keys;
 	}
 
 	undef $itemref;
