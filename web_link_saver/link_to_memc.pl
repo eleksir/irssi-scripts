@@ -10,32 +10,32 @@ use vars qw($VERSION %IRSSI);
 
 sub hookfn;
 
-$VERSION = '1.00a';
+$VERSION = '1.01';
 %IRSSI = (
     authors     => 'Eleksir',
     contact     => 'eleksir@exs-elm.ru',
     name        => 'Image link saver',
     description => 'Saves image link to memcache',
     license     => 'BSD',
-    changed     => 'Sun Mar 11 15:39 CET 2018',
+    changed     => 'Sat Apr 28 15:25 CET 2018',
 );
 
 
 Irssi::signal_add_last("message public", "hookfn");
 
+my $mc = '127.0.0.1:11211';
+
 sub hookfn {
 	my ($a, $text, $b, $c) = @_;
 	my @words = split(/\s+/, $text);
 
-	foreach (@words) {
-		if ($_ =~ m{:?https?://([a-zA-Z0-9.-]+\.[a-zA-Z]+)/(?:.*)}) {
-			my $memd = new Cache::Memcached { 'servers' => [ "127.0.0.1:11211" ] };
-			$memd->set('irssi_' . md5_base64($str), $str);
+	foreach my $word (@words) {
+		if ($word =~ m{:?https?://([a-zA-Z0-9.-]+\.[a-zA-Z]+)/(?:.*)}) {
+			my $memd = new Cache::Memcached { 'servers' => [ $mc ] };
+			$memd->set(sprintf("irssi_%s", md5_base64($word)), $word);
 			$memd->disconnect_all;
-			last;
 		}
 	}
 
 	return;
 }
-
