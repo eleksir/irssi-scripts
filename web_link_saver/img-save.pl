@@ -5,8 +5,12 @@ use strict;
 use Cache::Memcached;
 use URI::URL;
 
+sub logger($);
+
 my $HTINY = undef;
 my $HTINYS = undef;
+my $DEBUG = 0;
+my $mc = '127.0.0.1:11211';
 
 eval {
 	require HTTP::Tiny;            # stock perl module, but some assholes from debian rip perl into modules,
@@ -15,6 +19,7 @@ eval {
 
 if ($@ eq '') {
 	$HTINY = 1;
+	logger ("* HTTP::Tiny detected, will use it for http links.");
 
 	eval {
 		require Net::SSLeay;
@@ -22,6 +27,8 @@ if ($@ eq '') {
 	};
 
 	if ($@ eq '') {
+		logger ("* Net::SSLeay detected, if IO::Socket::SSL will be detected, will use it for https links.");
+
 		eval {
 			require IO::Socket::SSL;
 			import IO::Socket::SSL;
@@ -30,7 +37,12 @@ if ($@ eq '') {
 		if ($@ eq '') {
 			$HTINYS = 1; # to operate ssl stuff, we need Net::SSLeay, but sometimes
 			             # installed perl environment lacks it, so use Tiny with care
+			logger ("* IO::Socket::SSL detected, will use it with HTTP::Tiny for https.");
+	        } else {
+			logger ("* IO::Socket::SSL missing.");
 		}
+	} else {
+		logger ("* Net::SSLeay missing.");
 	}
 }
 
@@ -44,7 +56,12 @@ if ($^O ne 'cygwin') {   # cygwin 2.882 64-bit has broken Image::Magick
 
 	if ($@ eq '') {
 		$IMAGEMAGICK = 1;
+		logger ("* Image::Magick detected, will use it for guessing file content.");
+	} else {
+		logger ("* Image::Magick missing.");
 	}
+} else {
+	logger ("* Cygwin detected, omitting Image::Magick support, as it seems to be broken.");
 }
 
 sub dlfunc(@);
@@ -54,22 +71,34 @@ sub urlencode($);
 
 my $wgetpath = '';
 
-if (-f "/bin/wget") {
-	$wgetpath = '/bin/wget';
-} elsif (-f "/usr/bin/wget") {
-	$wgetpath = '/usr/bin/wget';
-} elsif (-f "/usr/local/bin/wget") {
-	$wgetpath = '/usr/local/bin/wget';
+if (($HTINY == 0) or ($HTINYS == 0)) {
+	if (-f "/bin/wget") {
+		$wgetpath = '/bin/wget';
+	} elsif (-f "/usr/bin/wget") {
+		$wgetpath = '/usr/bin/wget';
+	} elsif (-f "/usr/local/bin/wget") {
+		$wgetpath = '/usr/local/bin/wget';
+	}
+
+	if ($HTINY == 0) {
+		logger ("* Using $wgetpath for http.");
+	}
+
+	if ($HTINYS == 0) {
+		logger ("* Using $wgetpath for https.");
+	}
 }
 
+# print "* wget detected at $wgetpath.\n";
+
 while ( 1 ) {
-	my $memd = new Cache::Memcached { 'servers' => [ "127.0.0.1:11211" ] };
+	my $memd = new Cache::Memcached { 'servers' => [ "$mc" ] };
 	my $itemref = $memd->stats(['items']);
 
-	if (defined($itemref->{'hosts'}->{'127.0.0.1:11211'}->{'items'})
-	        and (length($itemref->{'hosts'}->{'127.0.0.1:11211'}->{'items'}) > 2)) {
+	if (defined($itemref->{'hosts'}->{'$mc'}->{'items'})
+	        and (length($itemref->{'hosts'}->{'$mc'}->{'items'}) > 2)) {
 
-		foreach my $stat (split("\n", $itemref->{'hosts'}->{'127.0.0.1:11211'}->{'items'})) {
+		foreach my $stat (split("\n", $itemref->{'hosts'}->{'$mc'}->{'items'})) {
 			my $slab;
 			my $itemsamount;
 
@@ -85,11 +114,12 @@ while ( 1 ) {
 			my $cachedump = $memd->stats(["cachedump $slab $itemsamount"]);
 			my @keys = map {
 				(split(/ /))[1];
-			} split(/\n/, $cachedump->{'hosts'}->{'127.0.0.1:11211'}->{"cachedump $slab $itemsamount"});
+			} split(/\n/, $cachedump->{'hosts'}->{'$mc'}->{"cachedump $slab $itemsamount"});
 
 			foreach my $key (@keys) {
 				if (($key =~ /^irssi_/) or ($key =~ /^xchtlink_/)) {
 					my $url = $memd->get($key);
+					logger "+ Got $key -> $url";
 					cdlfunc($url);
 					undef $url;
 					$memd->delete($key);
@@ -242,3 +272,12 @@ sub urlencode($) {
 	undef $urlobj;
 	return $url;
 }
+
+sub logger($) {
+	my $msg = shift;
+
+	unless ($DEBUG == 0) {
+		syswrite STDOUT, "$msg\n";
+	}
+}
+
