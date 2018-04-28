@@ -92,13 +92,13 @@ if (($HTINY == 0) or ($HTINYS == 0)) {
 # print "* wget detected at $wgetpath.\n";
 
 while ( 1 ) {
-	my $memd = new Cache::Memcached { 'servers' => [ "$mc" ] };
+	my $memd = new Cache::Memcached { 'servers' => [ $mc ] };
 	my $itemref = $memd->stats(['items']);
 
-	if (defined($itemref->{'hosts'}->{'$mc'}->{'items'})
-	        and (length($itemref->{'hosts'}->{'$mc'}->{'items'}) > 2)) {
+	if (defined($itemref->{'hosts'}->{$mc}->{'items'})
+	        and (length($itemref->{'hosts'}->{$mc}->{'items'}) > 2)) {
 
-		foreach my $stat (split("\n", $itemref->{'hosts'}->{'$mc'}->{'items'})) {
+		foreach my $stat (split("\n", $itemref->{'hosts'}->{$mc}->{'items'})) {
 			my $slab;
 			my $itemsamount;
 
@@ -114,7 +114,7 @@ while ( 1 ) {
 			my $cachedump = $memd->stats(["cachedump $slab $itemsamount"]);
 			my @keys = map {
 				(split(/ /))[1];
-			} split(/\n/, $cachedump->{'hosts'}->{'$mc'}->{"cachedump $slab $itemsamount"});
+			} split(/\n/, $cachedump->{'hosts'}->{$mc}->{"cachedump $slab $itemsamount"});
 
 			foreach my $key (@keys) {
 				if (($key =~ /^irssi_/) or ($key =~ /^xchtlink_/)) {
