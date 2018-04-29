@@ -11,6 +11,7 @@ my $HTINY = undef;
 my $HTINYS = undef;
 my $DEBUG = 0;
 my $mc = '127.0.0.1:11211';
+my $SAVEPATH = '';
 
 eval {
 	require HTTP::Tiny;            # stock perl module, but some assholes from debian rip perl into modules,
@@ -89,8 +90,6 @@ if (($HTINY == 0) or ($HTINYS == 0)) {
 	}
 }
 
-# print "* wget detected at $wgetpath.\n";
-
 while ( 1 ) {
 	my $memd = new Cache::Memcached { 'servers' => [ $mc ] };
 	my $itemref = $memd->stats(['items']);
@@ -147,14 +146,21 @@ sub cdlfunc($) {
 	my $extension = is_picture($url);
 
 	if (defined($extension)) {
-		my $savepath = sprintf("%s/imgsave", $ENV{'HOME'});
+		my $savepath;
+
+		if((! defined($SAVEPATH)) or  ($SAVEPATH eq '')) {
+			$savepath = sprintf("%s/imgsave", $ENV{'HOME'});
+		} else {
+			$savepath = $SAVEPATH;
+		}
+
 		mkdir ($savepath) unless (-d $savepath);
 		my $fname = $url;
 		$fname =~ s/[^\w!., -#]/_/g;
 		$savepath = sprintf("%s/%s.%s", $savepath, $fname, $extension);
 
 		if ( (lc($url) =~ /\.(gif|jpe?g|png|webm|mp4)$/) and ($1 eq $extension) ) {
-			$savepath = $ENV{'HOME'} . "/imgsave/" . $fname;
+			$savepath = sprintf("%s/%s", $savepath, $fname);
 		}
 
 		dlfunc($url, $savepath);
@@ -280,4 +286,3 @@ sub logger($) {
 		syswrite STDOUT, "$msg\n";
 	}
 }
-
